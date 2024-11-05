@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <title>Amplificador de Potencia</title>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+    <style>
+        html{
+            border: 0px;
+            font-family: "Roboto";
+            background: repeating-linear-gradient(-45deg, #fff 0 20px, #f3f3f3 0 40px);
+        }
+        h2{
+            display: grid;
+            justify-content: center;
+            margin-top: 8px;
+        }
+        .container{
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+        .subcontainer{
+            display: block;
+        }
+        label{
+            padding-inline: 10px;
+        }
+        span{
+            padding-inline: 10px;
+        }
+        #resultado{
+            padding-inline: 20px;
+            margin-top: 0px;
+        }
+        img{
+            width: 300px;
+            padding-inline: 10px;
+        }
+        input {
+            --c: orange; /* active color */
+            --g: 3px; /* the gap */
+            --l: 5px; /* line thickness*/
+            --s: 20px; /* thumb size*/
+            
+            width: 400px;
+            height: var(--s); /* needed for Firefox*/
+            --_c: color-mix(in srgb, var(--c), #000 var(--p,0%));
+            -webkit-appearance :none;
+            -moz-appearance :none;
+            appearance :none;
+            background: none;
+            cursor: pointer;
+            overflow: hidden;
+            padding-bottom: 4px;
+        }
+            input:focus-visible,
+            input:hover{
+            --p: 25%;
+            }
+            input:active,
+            input:focus-visible{
+            --_b: var(--s)
+            }
+            /* chromium */
+            input[type="range" i]::-webkit-slider-thumb{
+            height: var(--s);
+            aspect-ratio: 1;
+            border-radius: 50%;
+            box-shadow: 0 0 0 var(--_b,var(--l)) inset var(--_c);
+            border-image: linear-gradient(90deg,var(--_c) 50%,#ababab 0) 0 1/calc(50% - var(--l)/2) 100vw/0 calc(100vw + var(--g));
+            -webkit-appearance: none;
+            appearance: none;
+            transition: .3s;
+            }
+            /* Firefox */
+            input[type="range"]::-moz-range-thumb {
+            height: var(--s);
+            width: var(--s);
+            background: none;
+            border-radius: 50%;
+            box-shadow: 0 0 0 var(--_b,var(--l)) inset var(--_c);
+            border-image: linear-gradient(90deg,var(--_c) 50%,#ababab 0) 0 1/calc(50% - var(--l)/2) 100vw/0 calc(100vw + var(--g));
+            -moz-appearance: none;
+            appearance: none;
+            transition: .3s;
+            }
+            @supports not (color: color-mix(in srgb,red,red)) {
+            input {
+                --_c: var(--c);
+            }
+        }
+        table.colapsado {
+            border-collapse: collapse;
+        }
+
+    </style>
+</head>
+<body>
+    <h2 class="titulo">Curva Amplificador Clase A</h2>
+
+    <div class="container">
+        <div class="subcontainer">
+            <label for="vcc">Vcc:</label>
+            <input type="range" id="vcc" min="0" max="20" step="0.1" value="20" oninput="calcular()">
+            <span id="vcc-value">20</span><br>
+
+            <label for="rc">R<sub>C</sub>: </label>
+            <input type="range" id="rc" min="10" max="100" step="0.1" value="51.85" oninput="calcular()">
+            <span id="rc-value">51.9</span><br>
+
+            <label for="rb">R<sub>B</sub>: </label>
+            <input type="range" id="rb" min="5000" max="10000" step="1" value="10000" oninput="calcular()">
+            <span id="rb-value">1000</span><br>
+
+            <label for="b">β:  </label>
+            <input type="range" id="b" min="100" max="200" step="1" value="100" oninput="calcular()">
+            <span id="b-value">100</span><br>
+
+            <label for="Vin">V<sub>in</sub>:</label>
+            <input type="range" id="Vin" min="1e-3" max="100e-3" step="0.2e-3" value="13.8e-3" oninput="calcular()">
+            <span id="vin-value">100</span>
+        </div>
+
+        <table class="colapsado" id="resultado" border="1">
+            <tr>
+                <th>Parámetro</th>
+                <th>Valor</th>
+            </tr>
+        </table>
+
+        <img src="img/classa.jpg" alt="Amplificador Clase A">
+    </div>
+
+    <div id="gd"></div>
+    <script>
+        function calcular() {
+            function linspace(start, end, num) {
+                return Array.from({ length: num }, (_, i) => start + (i * (end - start) / (num - 1)));
+            }
+
+            // Actualizar los valores de los sliders en la interfaz
+            const Vcc = parseFloat(document.getElementById("vcc").value);
+            document.getElementById("vcc-value").innerText = `${Vcc} v`;
+            const Rc = parseFloat(document.getElementById("rc").value);
+            document.getElementById("rc-value").innerText = `${Rc} Ω`;
+            const Rb = parseFloat(document.getElementById("rb").value);
+            document.getElementById("rb-value").innerText = `${Rb} Ω`;
+            const b = parseFloat(document.getElementById("b").value); // Ganancia de corriente beta
+            document.getElementById("b-value").innerText = `${b}`;
+            const Vin = parseFloat(document.getElementById("Vin").value); // Ganancia de corriente beta
+            document.getElementById("vin-value").innerText = `${(Vin*1e3).toFixed(2)} mVp`;
+
+            const T = 2 * Math.PI; // 2π constante
+
+            // Cálculos
+            const VCE = Array.from({ length: 1000 }, (_, i) => (Vcc * i) / 999); // Rango de voltaje de colector-emisor
+            const Ib = (Vcc - 0.7) / Rb; // Corriente de base asumiendo 0.7V de caída de la unión base-emisor
+            const Ic_sat = Vcc / Rc; // Corriente de colector de saturación
+            const ICQ = Ib * b; // Corriente ICQ usando beta
+            const VCEQ = Vcc - ICQ * Rc; // Voltaje VCE en el punto de trabajo Q
+            const ICQmin = (ICQ - (Ic_sat - ICQ)) * 1e3; // Convertido a mA
+            const IE = Ib + ICQ;
+            const re = (26*1e-3) / IE;
+            const Av = - (Rc/re);
+            const Vout = Av * Vin * -1;
+            const theta = Math.atan((Ic_sat)/Vcc);
+            const icmin = Math.tan(theta) * (Vcc-(VCEQ+Vout));
+            const icmax = Math.tan(theta) * (Vcc-(VCEQ-Vout));
+            const icout = (icmax-icmin)/2;
+            const vcerms = (1/Math.sqrt(2))*Vout;
+            const icrms = (1/Math.sqrt(2))*icout;
+            const Po = vcerms * icrms;
+            const Pin = Vcc * ICQ;
+            const n = Po/Pin * 100;
+
+            // Puntos en la línea roja (por ejemplo)
+            let x1 = 0, y1 = Ic_sat;  // Punto inicial
+            let x2 = Vcc, y2 = 0;   // Punto final
+
+            // Calcular pendiente de la línea roja
+            let m = (y2 - y1) / (x2 - x1);
+
+            // Calcular pendiente de la línea perpendicular
+            let m1 = -1 / m;
+
+            let y_start = icmax*1e3;
+            let x_start = VCEQ-Vout;
+            let y_end = Ic_sat*1e3+10;
+            let x_end = (y_end-icmax*1e3)/m1 + x_start;
+
+            // Añadir la línea perpendicular al gráfico
+            let vimax = {
+                x: [x_start, x_end],
+                y: [y_start, y_end],
+                mode: 'lines',
+                line: { color: 'rgb(142, 124, 195)', dash: 'dash' },
+                showlegend: false
+            };
+
+            y_start = icmin*1e3;
+            x_start = VCEQ+Vout;
+            x_end = Vcc;
+            y_end = m1*(x_end-x_start) + y_start;
+
+            let vimin = {
+                x: [x_start, x_end],
+                y: [y_start, y_end],
+                mode: 'lines',
+                line: { color: 'rgb(142, 124, 195)', dash: 'dash' },
+                showlegend: false
+            };
+
+            y_start = ICQ*1e3;
+            x_start = VCEQ;
+            y_end = Ic_sat*1e3+10;
+            x_end = (y_end-y_start)/m1 + x_start;
+
+            let vi = {
+                x: [x_start, x_end],
+                y: [y_start, y_end],
+                mode: 'lines',
+                line: { color: 'rgb(142, 124, 195)', dash: 'dash' },
+                showlegend: false
+            };
+
+
+            // Mostrar resultados
+            const resultado = document.getElementById("resultado");
+            resultado.innerHTML = `
+                <tr><td>Ic<sub>sat</sub></td><td>${(Ic_sat * 1e3).toFixed(3)} mA</td><td>I<sub>C</sub></td><td>${(ICQ * 1e3).toFixed(3)} mA</td></tr>
+                <tr><td>I<sub>B</sub></td><td>${(Ib * 1e3).toFixed(3)} mA</td><td>V<sub>CE</sub></td><td>${VCEQ.toFixed(3)} V</td></tr>
+                <tr><td>Vout</td><td>${Vout.toFixed(3)} Vp</td><td>Pto.Q</td><td>(${VCEQ.toFixed(2)}, ${(ICQ * 1e3).toFixed(2)} mA)</td></tr>
+                <tr><td>Iout</td><td>${(icout*1e3).toFixed(3)} mAp</td><td>Av</td><td>${Av.toFixed(3)}</td></tr>
+                <tr><td>Pout</td><td>${(Po*1e3).toFixed(3)} mW</td><td>Pin</td><td>${Pin.toFixed(3)} W</td></tr>
+                <tr><td>η</td><td>${n.toFixed(3)} %</td><td>I<sub>E</sub></td><td>${(IE*1e3).toFixed(3)} mA</td></tr>
+            `;
+
+            // Generar los datos de la gráfica
+            var trace1 = {
+                x: [0, Vcc],
+                y: [Ic_sat * 1e3, 0],
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Recta carga DC',
+                line: {
+                    color: 'rgb(255, 0, 0)',
+                    width: 2
+                }
+            };
+
+            // Calcular y para cada valor de VCE
+            const yValues = VCE.map(vce => (Ib * 1e3 * b) * (1 - Math.exp(-vce / 0.1)));
+
+            var trace2 = {
+                x: VCE,
+                y: yValues,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'IB',
+                line: {
+                    color: 'rgb(0, 204, 0)',
+                    width: 2
+                }
+            };
+
+            var trace3 = {
+                x: [VCEQ],
+                y: [ICQ * 1e3],
+                mode: 'markers',
+                name: 'Pto Q',
+                marker: {
+                    color: 'rgb(142, 124, 195)',
+                    size: 12
+                },
+                type: 'scatter'
+            };
+
+            var trace4 = {
+                x: [-T, Vcc + 5],
+                y: [icmax * 1e3, icmax * 1e3],
+                mode: 'lines',
+                line: {
+                    color: 'rgb(142, 124, 195)',
+                    width: 1.5,
+                    dash: 'dash'
+                },
+                type: 'scatter',
+                showlegend: false
+            };
+
+            var trace5 = {
+                x: [VCEQ, VCEQ],
+                y: [-(T * 2 + 10), Ic_sat * 1e3 + 10],
+                mode: 'lines',
+                line: {
+                    color: 'rgb(142, 124, 195)',
+                    width: 1.5,
+                    dash: 'dash'
+                },
+                type: 'scatter',
+                showlegend: false
+            };
+
+            var trace6 = {
+                x: [Vcc, Vcc],
+                y: [-(T * 2 + 10), Ic_sat * 1e3 + 10],
+                mode: 'lines',
+                line: {
+                    color: 'rgb(142, 124, 195)',
+                    width: 1.5,
+                    dash: 'dash'
+                },
+                type: 'scatter',
+                showlegend: false
+            };
+
+            var trace7 = {
+                x: [-T, Vcc + 5],
+                y: [icmin * 1e3, icmin * 1e3],
+                mode: 'lines',
+                line: {
+                    color: 'rgb(142, 124, 195)',
+                    width: 1.5,
+                    dash: 'dash'
+                },
+                type: 'scatter',
+                showlegend: false
+            };
+
+            var trace8 = {
+                x: [-T, Vcc + 5],
+                y: [ICQ * 1e3, ICQ * 1e3],
+                mode: 'lines',
+                line: {
+                    color: 'rgb(142, 124, 195)',
+                    width: 1.5,
+                    dash: 'dash'
+                },
+                type: 'scatter',
+                showlegend: false
+            };
+
+            var trace11 = {
+                x: [VCEQ-Vout, VCEQ-Vout],
+                y: [-(T * 2 + 10), Ic_sat * 1e3 + 10],
+                mode: 'lines',
+                line: {
+                    color: 'rgb(142, 124, 195)',
+                    width: 1.5,
+                    dash: 'dash'
+                },
+                type: 'scatter',
+                showlegend: false
+            };
+
+            var trace12 = {
+                x: [VCEQ+Vout, VCEQ+Vout],
+                y: [-(T * 2 + 10), Ic_sat * 1e3 + 10],
+                mode: 'lines',
+                line: {
+                    color: 'rgb(142, 124, 195)',
+                    width: 1.5,
+                    dash: 'dash'
+                },
+                type: 'scatter',
+                showlegend: false
+            };
+
+            const y = linspace(-T * 2, 0, 1000);
+            const xValues = y.map(vce => Vout * Math.sin(0.5 * vce) + VCEQ);
+
+            var trace9 = {
+                x: xValues,
+                y: y,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Vout',
+                line: {
+                    color: 'rgb(153, 0, 153)'
+                }
+            };
+
+            const x = linspace(-T, 0, 1000);
+            const yValues2 = x.map(vce => (icout) * 1e3 * Math.sin(1 * vce) + ICQ * 1e3);
+
+            var trace10 = {
+                x: x,
+                y: yValues2,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Iout',
+                line: {
+                    color: 'rgb(153, 0, 0)'
+                }
+            };
+
+            var data = [trace1, trace2, trace3, trace4, trace5, trace6, trace7, trace8, trace11, trace12, trace9, trace10, vimax, vimin, vi];
+
+            var layout = {
+                title: 'Curva Amp Clase A',
+                xaxis: {
+                  title: 'VCE [v]',
+                  range: [-(T + 1), Vcc + 5],
+                  showgrid: true,
+                  zeroline: true
+                },
+                yaxis: {
+                  title: 'IC [mA]',
+                  range: [-(T * 2 + 10), Ic_sat * 1e3 + 10],
+                  showline: true
+                },
+                showlegend: true
+            };
+
+            // graficar
+            Plotly.newPlot('gd', data, layout);
+        }
+
+        calcular();
+    </script>
+</body>
+</html>
